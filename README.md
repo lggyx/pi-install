@@ -16,7 +16,30 @@
 
 ## 快速开始
 
-把脚本传到服务器，然后**用 bash 运行**：
+### 方式一：curl 一键运行（服务器能直连 GitHub 时）
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh)
+```
+
+> **为什么不是 `curl … | bash`？** 本工具是交互式菜单，需要终端输入。`bash <(curl …)` 把脚本作为文件描述符读入，终端交互不受影响，效果和下载后运行完全一样。
+
+国内网络直连 `raw.githubusercontent.com` 不稳定时，可用 jsDelivr CDN 镜像：
+
+```bash
+bash <(curl -fsSL https://cdn.jsdelivr.net/gh/lggyx/pi-install@main/pi-install.sh)
+```
+
+CDN 有缓存，刚推送的更新可能延迟数小时才生效。
+
+### 方式二：下载后运行（可先审查再执行）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh -o pi-install.sh
+bash pi-install.sh
+```
+
+### 方式三：scp 上传（最传统，不依赖服务器网络）
 
 ```bash
 # 本地（PowerShell / macOS / Linux 均可）
@@ -27,7 +50,9 @@ ssh root@你的服务器
 bash pi-install.sh     # 注意：不要用 sh，Debian/Ubuntu 的 sh 是 dash
 ```
 
-首次使用流程：选 `1` 安装 pi → 按提示添加第一个 provider → `source ~/.bashrc` → 输入 `pi` 开用。
+### 首次使用
+
+选 `1` 安装 pi → 按提示添加第一个 provider → `source ~/.bashrc` → 输入 `pi` 开用。
 
 ## 菜单
 
