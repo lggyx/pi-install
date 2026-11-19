@@ -772,11 +772,14 @@ edit_model() {
 uninstall_pi_pkg() {
     load_nvm
     if command -v pi >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
-        info "正在卸载 pi（npm 全局包）..."
+        info "正在卸载 pi（npm 安装对应的官方卸载命令）..."
         npm uninstall -g @earendil-works/pi-coding-agent
         info "pi 已卸载"
+        warn "按官方设计，~/.pi/agent 的配置/凭证/会话不会被此命令删除，需要清理请选菜单 8 → 3"
+        warn "若你另外用 pi.dev/install.sh 装过 pi，官方方式是重跑该脚本并选 Uninstall Pi"
     else
         info "未检测到可卸载的 pi（或 npm 不可用），跳过"
+        warn "若你用 pi.dev/install.sh 装过 pi，请重跑该脚本并选择 Uninstall Pi"
     fi
 }
 

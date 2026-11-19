@@ -80,6 +80,8 @@ bash pi-install.sh     # 注意：不要用 sh，Debian/Ubuntu 的 sh 是 dash
 
 系统自带的 Node、包管理器内容全程不受影响；每一步删除前都有确认。
 
+与官方卸载方式的关系：本工具经 npm 安装 pi，`npm uninstall -g @earendil-works/pi-coding-agent` 即官方文档为此安装方式给出的卸载命令；官方明确说明卸载不会删除 `~/.pi/agent/`（配置、凭证、会话、已装 pi 包），所以向导把数据清理做成了独立的第 3 步。若你还用 `pi.dev/install.sh` 装过一份 pi，请重跑该脚本并选择 "Uninstall Pi"。
+
 ## 数据存放
 
 | 文件 | 内容 |
