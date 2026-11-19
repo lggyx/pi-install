@@ -766,6 +766,146 @@ edit_model() {
 }
 
 # ============================================================
+# 菜单 8：卸载（本脚本装过/写过的东西，分块清理）
+# 注意各步顺序：全部卸载时先卸 pi（要 npm），最后才动 nvm
+# ============================================================
+uninstall_pi_pkg() {
+    load_nvm
+    if command -v pi >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+        info "正在卸载 pi（npm 全局包）..."
+        npm uninstall -g @earendil-works/pi-coding-agent
+        info "pi 已卸载"
+    else
+        info "未检测到可卸载的 pi（或 npm 不可用），跳过"
+    fi
+}
+
+clean_bashrc_block() {
+    if [ ! -f "$SHELL_RC" ]; then
+        info "$SHELL_RC 不存在，跳过"
+        return 0
+    fi
+    # 托管块（keys.env 加载行 + 别名都在标记内）
+    sed -i "/^${BASHRC_BLOCK_BEGIN//\//\\/}\$/,/^${BASHRC_BLOCK_END//\//\\/}\$/d" "$SHELL_RC"
+    # 最老版脚本（pi-stepfun-install.sh）的散行
+    sed -i '/^export STEPFUN_API_KEY=/d' "$SHELL_RC"
+    sed -i '/^export OPENAI_BASE_URL=/d' "$SHELL_RC"
+    sed -i "/^alias pi='pi --provider/d" "$SHELL_RC"
+    info ".bashrc 托管块及旧版残留已清理"
+}
+
+remove_pi_data() {
+    if [ ! -d "$HOME/.pi" ]; then
+        info "~/.pi 不存在，跳过"
+        return 0
+    fi
+    echo "  1) 全部删除 ~/.pi（配置 + Key + 登录状态 + 会话历史）"
+    echo "  2) 只删本工具写的配置（models/settings/keys/trust/auth），保留会话历史"
+    local c=""
+    read -rp "选择 [2]: " c || return 0
+    case "$c" in
+        1)
+            rm -rf "$HOME/.pi"
+            info "~/.pi 已整体删除"
+            ;;
+        *)
+            rm -f "$PI_MODELS_FILE" "$PI_SETTINGS_FILE" "$PI_KEYS_FILE" \
+                  "$PI_DIR/trust.json" "$PI_DIR/auth.json"
+            info "配置文件已删除（会话历史保留在 ~/.pi）"
+            ;;
+    esac
+}
+
+uninstall_node() {
+    load_nvm
+    command -v nvm >/dev/null 2>&1 || { info "nvm 不可用，跳过"; return 0; }
+    [ -d "${NVM_DIR:-$HOME/.nvm}/versions/node" ] || { info "没有 nvm 安装的 Node，跳过"; return 0; }
+    # 只动本脚本管理的主版本（默认 24），用户 nvm 里其他版本不碰
+    local vers v
+    vers="$(ls "${NVM_DIR:-$HOME/.nvm}/versions/node" | grep "^v${NODE_WANT_MAJOR}\." || true)"
+    [ -n "$vers" ] || { info "没有 v${NODE_WANT_MAJOR}.x 的 Node，跳过"; return 0; }
+    warn "将卸载 Node：$(echo "$vers" | tr '\n' ' ')（装在它下面的全局 npm 包会一并消失）"
+    nvm deactivate >/dev/null 2>&1 || true
+    for v in $vers; do
+        nvm uninstall "${v#v}" >/dev/null 2>&1 \
+            || nvm uninstall "$v" >/dev/null 2>&1 \
+            || warn "卸载 $v 失败，请手动执行: nvm uninstall ${v#v}"
+    done
+    # default 别名指向本脚本装的版本时才清除，指向其他版本则保留
+    if nvm alias default 2>/dev/null | grep -q "v${NODE_WANT_MAJOR}\."; then
+        nvm unalias default >/dev/null 2>&1 || true
+        info "nvm default 别名已清除"
+    fi
+    info "Node v${NODE_WANT_MAJOR}.x 已卸载（当前终端 PATH 有残留，新开终端即正常）"
+}
+
+uninstall_nvm() {
+    if [ ! -d "$HOME/.nvm" ]; then
+        info "~/.nvm 不存在，跳过"
+        return 0
+    fi
+    warn "将删除整个 ~/.nvm（含其中所有 Node 版本与全部全局 npm 包）"
+    local ok=""
+    read -rp "确认? [y/N]: " ok || true
+    case "$ok" in
+        y|Y) ;;
+        *)   info "已跳过"; return 0 ;;
+    esac
+    rm -rf "$HOME/.nvm"
+    if [ -f "$SHELL_RC" ]; then
+        # 清掉 nvm 官方安装器写进 .bashrc 的三行引导
+        sed -i '/^export NVM_DIR=/d' "$SHELL_RC"
+        sed -i "/\$NVM_DIR\/nvm\.sh/d" "$SHELL_RC"
+        sed -i "/\$NVM_DIR\/bash_completion/d" "$SHELL_RC"
+    fi
+    info "nvm 已卸载（.bashrc 引导行已清理）"
+}
+
+uninstall_all() {
+    echo "将依次执行："
+    echo "  1) 卸载 pi（npm 全局包）"
+    echo "  2) 清理 .bashrc（托管块 + 旧版残留）"
+    echo "  3) 删除 pi 配置与数据（会再问范围）"
+    echo "  4) 卸载 Node v${NODE_WANT_MAJOR}.x（仅本脚本装的版本）"
+    echo "  5) 卸载 nvm 本体（~/.nvm + 引导行）"
+    local ok=""
+    read -rp "确认全部卸载? [y/N]: " ok || true
+    case "$ok" in
+        y|Y) ;;
+        *)   return 0 ;;
+    esac
+    uninstall_pi_pkg || true
+    clean_bashrc_block || true
+    remove_pi_data || true
+    uninstall_node || true
+    uninstall_nvm || true
+    info "卸载完成。当前终端的环境变量会有残留，退出重新登录即彻底干净"
+}
+
+uninstall_menu() {
+    echo ""
+    info "卸载向导（本脚本装过/写过的东西，分块清理，系统原有内容不受影响）"
+    echo "  a) 全部卸载（pi + .bashrc 痕迹 + 配置数据 + Node + nvm）"
+    echo "  1) 只卸载 pi 本体（npm 包）"
+    echo "  2) 只清理 .bashrc（托管块/旧版残留）"
+    echo "  3) 只删 pi 配置与数据"
+    echo "  4) 只卸载 Node v${NODE_WANT_MAJOR}.x"
+    echo "  5) 只卸载 nvm 本体"
+    echo "  0) 取消"
+    local c=""
+    read -rp "选择 [0]: " c || return 0
+    case "$c" in
+        a|A) uninstall_all || true ;;
+        1)   uninstall_pi_pkg || true ;;
+        2)   clean_bashrc_block || true ;;
+        3)   remove_pi_data || true ;;
+        4)   uninstall_node || true ;;
+        5)   uninstall_nvm || true ;;
+        *)   ;;
+    esac
+}
+
+# ============================================================
 # 主菜单
 # ============================================================
 main_menu() {
@@ -781,6 +921,7 @@ main_menu() {
         echo "  5) 重设 API Key"
         echo "  6) 删除 provider"
         echo "  7) 修改单个模型（参数 / 追加 / 删除）"
+        echo "  8) 卸载（pi / Node / nvm / 配置）"
         echo "  0) 退出"
         local status=""
         if command -v pi >/dev/null 2>&1; then
@@ -800,6 +941,7 @@ main_menu() {
             5) reset_key || true ;;
             6) delete_provider || true ;;
             7) edit_model || true ;;
+            8) uninstall_menu || true ;;
             0|q|Q) exit 0 ;;
             *) ;;
         esac
