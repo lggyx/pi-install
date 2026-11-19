@@ -5,7 +5,7 @@ set -euo pipefail
 
 # ============================================================
 # pi 管理器 —— 交互式菜单（安装 + 多中转站配置，单文件）
-# 适用：小型 Linux 服务器（不需要 sudo，全部装在 nvm 和用户目录）
+# 适用：小型 Linux 服务器 + Android/Termux（自动识别环境，Termux 走 pkg 装 Node）
 #
 # 用法：bash pi-install.sh   （需要交互式终端）
 #
@@ -51,6 +51,12 @@ PI_KEYS_FILE="$PI_DIR/keys.env"
 SHELL_RC="$HOME/.bashrc"
 BASHRC_BLOCK_BEGIN="# >>> pi-agent (managed by pi-install.sh) >>>"
 BASHRC_BLOCK_END="# <<< pi-agent (managed by pi-install.sh) <<<"
+
+# Termux（Android）环境检测：$PREFIX 形如 /data/data/com.termux/files/usr
+IS_TERMUX=0
+case "${PREFIX:-}" in
+    *com.termux*) IS_TERMUX=1 ;;
+esac
 
 if [ ! -t 0 ]; then
     fail "本脚本需要交互式终端运行：ssh 登录后执行 bash $0"
@@ -259,7 +265,11 @@ require_node() {
         . "$NVM_DIR/nvm.sh"
     fi
     if ! command -v node >/dev/null 2>&1; then
-        warn "未检测到 Node.js —— 请先执行菜单 1 安装 pi（会一并装好 Node）"
+        if [ "$IS_TERMUX" = "1" ]; then
+            warn "未检测到 Node.js —— Termux 下请先 pkg install nodejs（或执行菜单 1 自动安装）"
+        else
+            warn "未检测到 Node.js —— 请先执行菜单 1 安装 pi（会一并装好 Node）"
+        fi
         return 1
     fi
 }
@@ -343,41 +353,64 @@ node_major() {
 }
 
 install_pi() {
-    if ! command -v curl >/dev/null 2>&1; then
-        fail "缺少 curl，请先安装：sudo apt-get install -y curl（或对应包管理器）"
-        return 1
-    fi
-
-    # ---- nvm + Node ----
-    load_nvm
-    if [ ! -s "$NVM_DIR/nvm.sh" ]; then
-        install_nvm
-        load_nvm
-    fi
-    [ -s "$NVM_DIR/nvm.sh" ] || { fail "nvm 不可用：$NVM_DIR/nvm.sh 不存在"; return 1; }
-
-    # 刻意不检查系统 node：系统自带的版本可能很低，不能用
-    if [ "$(node_major)" = "$NODE_WANT_MAJOR" ] && command -v nvm >/dev/null 2>&1; then
-        info "nvm 当前已是 Node $(node -v)，跳过安装"
+    if [ "$IS_TERMUX" = "1" ]; then
+        # ---- Termux（Android）：官方方案 pkg 装 nodejs/git，跳过 nvm ----
+        # nvm 装的 Node 是 glibc 二进制，Termux（Bionic libc）跑不起来，
+        # 且 nvm 拒绝 Termux 的 PREFIX 环境变量，所以这里完全不碰 nvm
+        info "检测到 Termux 环境：按官方方案用 pkg 安装 Node（跳过 nvm）"
+        if ! command -v node >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
+            info "正在通过 pkg 安装 nodejs 和 git ..."
+            pkg update -y >/dev/null 2>&1 || true
+            pkg install -y nodejs git || { fail "pkg 安装失败，请手动执行: pkg update && pkg install nodejs git"; return 1; }
+        fi
+        local cur
+        cur="$(node_major)"
+        if [ "$cur" -lt "$NODE_MIN_MAJOR" ]; then
+            fail "Termux 的 Node 主版本 v${cur} 低于 ${NODE_MIN_MAJOR}，请执行: pkg upgrade nodejs"
+            return 1
+        fi
+        if ! node -v >/dev/null 2>&1; then
+            fail "Termux 的 Node 无法运行，请尝试: pkg reinstall nodejs"
+            return 1
+        fi
+        info "pi 将使用：$(command -v node) ($(node -v))"
     else
-        info "正在通过 nvm 安装 Node.js v${NODE_WANT_MAJOR}.x ..."
-        nvm install "$NODE_WANT_MAJOR"
-    fi
-    nvm use "$NODE_WANT_MAJOR" >/dev/null 2>&1 || { fail "无法切换到 nvm 的 Node v${NODE_WANT_MAJOR}"; return 1; }
-    nvm alias default "$NODE_WANT_MAJOR" >/dev/null
-    info "nvm 默认版本已设为 v${NODE_WANT_MAJOR}.x（新开终端自动生效）"
+        if ! command -v curl >/dev/null 2>&1; then
+            fail "缺少 curl，请先安装：sudo apt-get install -y curl（或对应包管理器）"
+            return 1
+        fi
 
-    local cur
-    cur="$(node_major)"
-    if [ "$cur" -lt "$NODE_MIN_MAJOR" ]; then
-        fail "当前 node 主版本 v${cur} 不满足 >=${NODE_MIN_MAJOR}（nvm 安装失败？）"
-        return 1
+        # ---- nvm + Node ----
+        load_nvm
+        if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+            install_nvm
+            load_nvm
+        fi
+        [ -s "$NVM_DIR/nvm.sh" ] || { fail "nvm 不可用：$NVM_DIR/nvm.sh 不存在"; return 1; }
+
+        # 刻意不检查系统 node：系统自带的版本可能很低，不能用
+        if [ "$(node_major)" = "$NODE_WANT_MAJOR" ] && command -v nvm >/dev/null 2>&1; then
+            info "nvm 当前已是 Node $(node -v)，跳过安装"
+        else
+            info "正在通过 nvm 安装 Node.js v${NODE_WANT_MAJOR}.x ..."
+            nvm install "$NODE_WANT_MAJOR"
+        fi
+        nvm use "$NODE_WANT_MAJOR" >/dev/null 2>&1 || { fail "无法切换到 nvm 的 Node v${NODE_WANT_MAJOR}"; return 1; }
+        nvm alias default "$NODE_WANT_MAJOR" >/dev/null
+        info "nvm 默认版本已设为 v${NODE_WANT_MAJOR}.x（新开终端自动生效）"
+
+        local cur
+        cur="$(node_major)"
+        if [ "$cur" -lt "$NODE_MIN_MAJOR" ]; then
+            fail "当前 node 主版本 v${cur} 不满足 >=${NODE_MIN_MAJOR}（nvm 安装失败？）"
+            return 1
+        fi
+        if ! node -v >/dev/null 2>&1; then
+            fail "Node 安装后无法运行，可能缺系统依赖。请先执行: sudo apt-get install -y libatomic1"
+            return 1
+        fi
+        info "pi 将使用：$(command -v node) ($(node -v))，系统原有 node 未做任何修改"
     fi
-    if ! node -v >/dev/null 2>&1; then
-        fail "Node 安装后无法运行，可能缺系统依赖。请先执行: sudo apt-get install -y libatomic1"
-        return 1
-    fi
-    info "pi 将使用：$(command -v node) ($(node -v))，系统原有 node 未做任何修改"
     command -v npm >/dev/null 2>&1 || { fail "未检测到 npm"; return 1; }
 
     # ---- pi 本体 ----
@@ -406,16 +439,24 @@ install_pi() {
     PI_VER="$installed" PI_OP=touch pi_json
     rewrite_bashrc_block
 
-    # ---- 自检：复现新终端的 PATH 顺序（只 warn 不中断） ----
-    local out check_node prefix
-    out="$(bash -ic 'which node; which pi' 2>/dev/null || true)"
-    check_node="$(echo "$out" | grep -m1 -- '/node$' || true)"
-    prefix="${NVM_DIR:-$HOME/.nvm}/versions/node/v${NODE_WANT_MAJOR}"
-    if [ -n "$check_node" ] && case "$check_node" in "$prefix"*) true;; *) false;; esac; then
-        info "自检通过：新终端的 node 来自 nvm"
+    # ---- 自检（只 warn 不中断） ----
+    if [ "$IS_TERMUX" = "1" ]; then
+        if command -v pi >/dev/null 2>&1; then
+            info "自检通过：pi 可用（$(command -v pi)）"
+        else
+            warn "安装后未找到 pi —— 官方建议新开一个 shell 再试；仍没有就检查 npm prefix -g 是否在 PATH 里"
+        fi
     else
-        warn "新终端里 node 不是 nvm 的 v${NODE_WANT_MAJOR}（实际: ${check_node:-未找到}）"
-        echo "  常见原因：$SHELL_RC 里 nvm 引导块之后还有 export PATH=... 的行把它顶下去了，调整行顺序即可。"
+        local out check_node prefix
+        out="$(bash -ic 'which node; which pi' 2>/dev/null || true)"
+        check_node="$(echo "$out" | grep -m1 -- '/node$' || true)"
+        prefix="${NVM_DIR:-$HOME/.nvm}/versions/node/v${NODE_WANT_MAJOR}"
+        if [ -n "$check_node" ] && case "$check_node" in "$prefix"*) true;; *) false;; esac; then
+            info "自检通过：新终端的 node 来自 nvm"
+        else
+            warn "新终端里 node 不是 nvm 的 v${NODE_WANT_MAJOR}（实际: ${check_node:-未找到}）"
+            echo "  常见原因：$SHELL_RC 里 nvm 引导块之后还有 export PATH=... 的行把它顶下去了，调整行顺序即可。"
+        fi
     fi
 
     echo ""
@@ -820,6 +861,10 @@ remove_pi_data() {
 }
 
 uninstall_node() {
+    if [ "$IS_TERMUX" = "1" ]; then
+        info "Termux 环境：Node 由 pkg 管理，如需卸载请执行 pkg uninstall nodejs（本工具不代劳）"
+        return 0
+    fi
     load_nvm
     command -v nvm >/dev/null 2>&1 || { info "nvm 不可用，跳过"; return 0; }
     [ -d "${NVM_DIR:-$HOME/.nvm}/versions/node" ] || { info "没有 nvm 安装的 Node，跳过"; return 0; }

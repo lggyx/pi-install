@@ -2,7 +2,7 @@
 
 在小服务器上一条命令安装 [pi](https://pi.dev)（`earendil-works/pi` 编码代理），再用交互式菜单管理任意多个中转站（OpenAI 兼容 API）、切换默认模型。
 
-单文件、免 sudo、幂等可重跑、不碰系统自带的 Node。
+单文件、免 sudo、幂等可重跑、不碰系统自带的 Node。支持 Linux 服务器与 Android/Termux（自动识别）。
 
 ## 特性
 
@@ -38,6 +38,18 @@ CDN 有缓存，刚推送的更新可能延迟数小时才生效。
 curl -fsSL https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh -o pi-install.sh
 bash pi-install.sh
 ```
+
+### Android / Termux
+
+脚本自动识别 Termux（通过 `$PREFIX`），并按 pi 官方 Termux 文档的方式安装：**跳过 nvm**（nvm 的 Node 是 glibc 二进制，在 Termux 跑不起来），改用 pkg：
+
+```bash
+pkg update
+bash <(curl -fsSL https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh)
+# 提示无 curl 就先: pkg install curl
+```
+
+脚本会通过 `pkg install nodejs git` 装依赖，再用官方同款 `npm install -g --ignore-scripts` 装 pi。卸载时 Node 部分请用 `pkg uninstall nodejs`（菜单 8 会提示）。
 
 ### 方式三：scp 上传（最传统，不依赖服务器网络）
 
