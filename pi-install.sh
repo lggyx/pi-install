@@ -358,19 +358,43 @@ install_pi() {
         # nvm 装的 Node 是 glibc 二进制，Termux（Bionic libc）跑不起来，
         # 且 nvm 拒绝 Termux 的 PREFIX 环境变量，所以这里完全不碰 nvm
         info "检测到 Termux 环境：按官方方案用 pkg 安装 Node（跳过 nvm）"
-        if ! command -v node >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
-            info "正在通过 pkg 安装 nodejs 和 git ..."
+
+        # 清理之前误装的 nvm 残留：里面的 node 在 Termux 根本无法执行，
+        # 留着只会让 node 解析到一个坏二进制（这是脚本旧版自己装的，直接清掉）
+        if [ -d "$HOME/.nvm" ]; then
+            warn "检测到旧版误装的 nvm 残留（~/.nvm，其中的 Node 在 Termux 无法运行），自动删除以免干扰"
+            rm -rf "$HOME/.nvm"
+            hash -r
+        fi
+
+        # node 缺失或损坏（node -v 失败）都走 pkg 安装/重装
+        if ! node -v >/dev/null 2>&1; then
+            if command -v node >/dev/null 2>&1; then
+                warn "检测到 node 但无法运行：$(command -v node)，尝试通过 pkg 重装..."
+                node -v || true   # 把真实报错显示出来，便于排查
+            else
+                info "未检测到 Node，正在通过 pkg 安装 nodejs 和 git ..."
+            fi
             pkg update -y >/dev/null 2>&1 || true
             pkg install -y nodejs git || { fail "pkg 安装失败，请手动执行: pkg update && pkg install nodejs git"; return 1; }
+            hash -r
+            if ! node -v >/dev/null 2>&1; then
+                fail "pkg 安装后 Node 仍无法运行。诊断信息："
+                echo "  node 位置: $(command -v node || echo 未找到)"
+                node -v || true
+                warn "常见处理：pkg reinstall nodejs，或 pkg upgrade 全量升级后再试"
+                return 1
+            fi
+        fi
+        # git 是 pi 官方 Termux 文档列出的依赖
+        if ! command -v git >/dev/null 2>&1; then
+            info "缺少 git（官方依赖），正在安装..."
+            pkg install -y git || warn "git 安装失败，pi 部分功能可能受限"
         fi
         local cur
         cur="$(node_major)"
         if [ "$cur" -lt "$NODE_MIN_MAJOR" ]; then
             fail "Termux 的 Node 主版本 v${cur} 低于 ${NODE_MIN_MAJOR}，请执行: pkg upgrade nodejs"
-            return 1
-        fi
-        if ! node -v >/dev/null 2>&1; then
-            fail "Termux 的 Node 无法运行，请尝试: pkg reinstall nodejs"
             return 1
         fi
         info "pi 将使用：$(command -v node) ($(node -v))"
