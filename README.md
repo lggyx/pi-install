@@ -14,6 +14,8 @@ Termux 上同样这条命令（脚本自动识别环境）。菜单打开后：
 2. 按提示录入第一个中转站（baseUrl + 模型 + API Key）
 3. `source ~/.bashrc`，输入 `pi` 开用
 
+> Windows 用户（PowerShell / cmd）？脚本跑在服务器上，本地只需「下载 + 上传」，见 [Windows 专节](#windowspowershell--cmd)。
+
 > 为什么不是 `curl … | bash`？本工具是交互式菜单，需要终端输入；`bash <(curl …)` 让脚本从文件描述符读入，终端交互不受影响。
 
 ## 我想…
@@ -79,6 +81,45 @@ scp pi-install.sh root@你的服务器:~/   # 本地执行
 ssh root@你的服务器 && bash pi-install.sh   # 服务器上执行
 ```
 
+### Windows（PowerShell / cmd）
+
+脚本是 bash、跑在服务器上；Windows 本地的工作只有**下载 + 上传**。Windows 10（1803+）/ 11 自带 `curl.exe`、`scp`、`ssh`，不用装额外软件。
+
+**PowerShell**（注意写 `curl.exe`——PowerShell 5.x 里 `curl` 是 `Invoke-WebRequest` 的别名，参数不兼容，会报错）：
+
+```powershell
+# 下载脚本（GitHub raw 与 jsDelivr CDN 二选一）
+curl.exe -o pi-install.sh https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh
+curl.exe -o pi-install.sh https://cdn.jsdelivr.net/gh/lggyx/pi-install@main/pi-install.sh
+
+# 上传到服务器
+scp pi-install.sh root@你的服务器:~/
+
+# 登录服务器，然后执行菜单
+ssh root@你的服务器
+# 登录后（服务器上）执行：bash pi-install.sh
+```
+
+老系统没有 `curl.exe` 时，用 PowerShell 内置的 `Invoke-WebRequest` 下载：
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh -OutFile pi-install.sh
+```
+
+**cmd**（Windows 10 1803+ 直接可用，无需加 `.exe` 后缀）：
+
+```cmd
+curl -o pi-install.sh https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh
+scp pi-install.sh root@你的服务器:~/
+ssh root@你的服务器
+```
+
+**Git Bash / WSL**：与 Linux 完全一致，一键命令直接可用：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh)
+```
+
 **Termux 补充**：脚本自动识别 Termux 并按 pi 官方文档处理——跳过 nvm（nvm 的 Node 是 glibc 二进制，在 Termux 跑不起来），改用 `pkg install nodejs git`；pi 的安装命令与官方文档一致（`npm install -g --ignore-scripts`）。缺 curl 就先 `pkg install curl`。
 
 ## 卸载
@@ -124,6 +165,8 @@ ssh root@你的服务器 && bash pi-install.sh   # 服务器上执行
 | Termux 下 pkg 装完 Node 仍异常 | 脚本会打印 node 的真实报错；常见处理 `pkg reinstall nodejs` 或 `pkg upgrade` |
 | pi 启动报 trust.json 损坏 | 旧版脚本遗留——脚本启动时会自动清理；手动删 `~/.pi/agent/trust.json` 亦可 |
 | 找不到 pi 命令 | `npm prefix -g` 确认全局 bin 目录在 PATH 里；新开一个 shell 再试 |
+| Windows 提示 `curl` 参数错误 | PowerShell 5.x 的 `curl` 是 `Invoke-WebRequest` 别名——改用 `curl.exe` 或 `Invoke-WebRequest` |
+| Windows 找不到 `scp` / `ssh` | 设置 → 应用 → 可选功能 → 添加「OpenSSH 客户端」（Win10 1803+ 通常自带） |
 
 支持的 API 类型：`openai-completions`（多数中转站）、`openai-responses`、`anthropic-messages`、`google-generative-ai`。
 
