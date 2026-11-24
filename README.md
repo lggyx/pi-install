@@ -1,22 +1,28 @@
 # pi-install — pi 编码代理管理器
 
-一条命令在 Linux 服务器或 Android/Termux 上安装 [pi](https://pi.dev) 编码代理，并用交互式菜单管理任意多个中转站（OpenAI 兼容 API）和模型。单文件、免 sudo、幂等可重跑、不碰系统自带的 Node。
+一条命令在 Linux 服务器、Android/Termux 或 Windows（Windows 10 / 11 / Windows Server）上安装 [pi](https://pi.dev) 编码代理，并用交互式菜单管理任意多个中转站（OpenAI 兼容 API）和模型。单文件、免 sudo、幂等可重跑、不碰系统自带的 Node。
 
 ## 30 秒上手
+
+**Linux / Termux**：
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh)
 ```
 
-Termux 上同样这条命令（脚本自动识别环境）。菜单打开后：
+**Windows（PowerShell 5.1+ / Windows 10 / 11 / Windows Server 原生）**：
 
-1. 选 `1` 安装 pi（Termux 自动走 pkg 装 Node，服务器走 nvm）
+```powershell
+irm https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.ps1 | iex
+```
+
+菜单打开后：
+
+1. 选 `1` 安装 pi（Linux 走 nvm，Termux 走 pkg，Windows 自动检测 Node 或免提权安装便携版 Node LTS）
 2. 按提示录入第一个中转站（baseUrl + 模型 + API Key）
-3. `source ~/.bashrc`，输入 `pi` 开用
+3. 新开终端（或 Linux `source ~/.bashrc`），输入 `pi` 开用
 
-> Windows 用户（PowerShell / cmd）？脚本跑在服务器上，本地只需「下载 + 上传」，见 [Windows 专节](#windowspowershell--cmd)。
-
-> 为什么不是 `curl … | bash`？本工具是交互式菜单，需要终端输入；`bash <(curl …)` 让脚本从文件描述符读入，终端交互不受影响。
+> 为什么 Linux 上不是 `curl … | bash`？本工具是交互式菜单，需要终端输入；`bash <(curl …)` 让脚本从文件描述符读入，终端交互不受影响。
 
 ## 我想…
 
@@ -81,32 +87,53 @@ scp pi-install.sh root@你的服务器:~/   # 本地执行
 ssh root@你的服务器 && bash pi-install.sh   # 服务器上执行
 ```
 
-### Windows（PowerShell / cmd）
+### Windows（Windows 10 / 11 / Windows Server）
 
-脚本是 bash、跑在服务器上；Windows 本地的工作只有**下载 + 上传**。Windows 10（1803+）/ 11 自带 `curl.exe`、`scp`、`ssh`，不用装额外软件。
+针对 Windows 设备（不管是桌面电脑还是 Windows Server 服务器），项目提供了原生 PowerShell 版菜单管理器 **`pi-install.ps1`**，无需 WSL、无需 bash、无需管理员提权：
 
-**PowerShell**（注意写 `curl.exe`——PowerShell 5.x 里 `curl` 是 `Invoke-WebRequest` 的别名，参数不兼容，会报错）：
+**方式一：PowerShell 一键运行（推荐）**
 
 ```powershell
-# 下载脚本（GitHub raw 与 jsDelivr CDN 二选一）
+irm https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.ps1 | iex
+```
+
+国内网络不稳定时可走 jsDelivr CDN 镜像：
+
+```powershell
+irm https://cdn.jsdelivr.net/gh/lggyx/pi-install@main/pi-install.ps1 | iex
+```
+
+**方式二：下载后本地运行**
+
+```powershell
+# 1) 下载脚本
+curl.exe -o pi-install.ps1 https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.ps1
+
+# 2) 允许执行并打开菜单
+powershell -ExecutionPolicy Bypass -File .\pi-install.ps1
+```
+
+> **Windows 原生特性**：
+> - **Node.js 自动配置**：未装 Node.js 或版本低于 22 时，脚本支持一键自动下载官方便携版 Node.js LTS 解压至 `%LOCALAPPDATA%\Programs\nodejs` 并自动写入用户 PATH，**全程无需 Administrator 管理员提权**。
+> - **持久化 Key 存储**：API Key 写入 Windows 当前用户环境变量（`[Environment]::SetEnvironmentVariable`），所有终端（PowerShell / CMD / VSCode）自动继承。
+> - **双端别名**：同时在 `$PROFILE` 写入 PowerShell 函数并在 `~/.pi/agent/bin` 生成 `pi-<provider>.cmd` 包装脚本，无论在 PowerShell 还是 CMD 中输入 `pi-<provider>` 均可直达对应中转站。
+
+---
+
+#### 补充：Windows 仅作为客户端连接远程 Linux 服务器
+
+如果你仅是在 Windows 客户端上下载，然后上传到远程 Linux 服务器部署：
+
+```powershell
+# 本地 PowerShell 下载
 curl.exe -o pi-install.sh https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh
-curl.exe -o pi-install.sh https://cdn.jsdelivr.net/gh/lggyx/pi-install@main/pi-install.sh
-
-# 上传到服务器
+# 上传到 Linux 服务器
 scp pi-install.sh root@你的服务器:~/
-
-# 登录服务器，然后执行菜单
+# 登录服务器后执行 bash pi-install.sh
 ssh root@你的服务器
-# 登录后（服务器上）执行：bash pi-install.sh
 ```
 
-老系统没有 `curl.exe` 时，用 PowerShell 内置的 `Invoke-WebRequest` 下载：
-
-```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh -OutFile pi-install.sh
-```
-
-**cmd**（Windows 10 1803+ 直接可用，无需加 `.exe` 后缀）：
+**cmd**（Windows 10 1803+ 直接可用）：
 
 ```cmd
 curl -o pi-install.sh https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.sh
@@ -166,6 +193,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/lggyx/pi-install/main/pi-ins
 | pi 启动报 trust.json 损坏 | 旧版脚本遗留——脚本启动时会自动清理；手动删 `~/.pi/agent/trust.json` 亦可 |
 | 找不到 pi 命令 | `npm prefix -g` 确认全局 bin 目录在 PATH 里；新开一个 shell 再试 |
 | Windows 提示 `curl` 参数错误 | PowerShell 5.x 的 `curl` 是 `Invoke-WebRequest` 别名——改用 `curl.exe` 或 `Invoke-WebRequest` |
+| Windows 提示在此系统上禁止运行脚本 | PowerShell 默认策略限制——执行 `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` 放行本地脚本 |
 | Windows 找不到 `scp` / `ssh` | 设置 → 应用 → 可选功能 → 添加「OpenSSH 客户端」（Win10 1803+ 通常自带） |
 
 支持的 API 类型：`openai-completions`（多数中转站）、`openai-responses`、`anthropic-messages`、`google-generative-ai`。
