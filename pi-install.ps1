@@ -1,28 +1,23 @@
-﻿# ============================================================
-# pi 管理器 —— Windows PowerShell 交互式菜单（安装 + 多中转站配置，单文件）
+# ============================================================
+# pi 管理器 —— Windows PowerShell 交互式菜单（安装 + 多中转站配置，单文件） 
 # 适用：Windows 10 / Windows 11 / Windows Server (2016/2019/2022/2025)
 #
-# 用法：
+# 用法： 
 #   powershell -ExecutionPolicy Bypass -File .\pi-install.ps1
-#   或一行命令直接执行：
+#   或一行命令直接执行： 
 #   irm https://raw.githubusercontent.com/lggyx/pi-install/main/pi-install.ps1 | iex
 #
-# 菜单能力：
-#   1. 安装 / 更新 pi（Node.js + pi 本体，免管理员便携式支持）
+# 菜单能力： 
+#   1. 安装 / 更新 pi（Node.js + pi 本体，免管理员便携式支持） 
 #   2. 添加 / 修改 provider：输入名字、baseUrl、模型列表、API Key
-#   3. 查看当前配置：默认模型、所有 provider、key 状态
-#   4. 切换默认模型
+#   3. 查看当前配置：默认模型、所有 provider、key 状态 
+#   4. 切换默认模型 
 #   5. 重设某个 provider 的 API Key
 #   6. 删除 provider
-#   7. 修改单个模型（参数 / 追加 / 删除）
-#   8. 卸载（pi / Node / 别名 / 配置）
-#   0. 退出
+#   7. 修改单个模型（参数 / 追加 / 删除） 
+#   8. 卸载（pi / Node / 别名 / 配置） 
+#   0. 退出 
 # ============================================================
-
-[CmdletBinding()]
-param(
-    [switch]$NoMenu
-)
 
 # ---------- 路径 / 常量 ----------
 $NODE_MIN_MAJOR = 22
@@ -37,7 +32,7 @@ $PROFILE_BLOCK_BEGIN = "# >>> pi-agent (managed by pi-install.ps1) >>>"
 $PROFILE_BLOCK_END   = "# <<< pi-agent (managed by pi-install.ps1) <<<"
 $UTF8_NO_BOM = New-Object System.Text.UTF8Encoding $false
 
-# 保证目录存在
+# 保证目录存在 
 if (-not (Test-Path $PI_DIR)) { New-Item -ItemType Directory -Force -Path $PI_DIR | Out-Null }
 if (-not (Test-Path $PI_BIN_DIR)) { New-Item -ItemType Directory -Force -Path $PI_BIN_DIR | Out-Null }
 
@@ -50,7 +45,7 @@ function Write-Fail($msg) { Write-Host "[FAIL]  $msg" -ForegroundColor Red }
 function Read-Input($prompt = "") {
     if ([Console]::IsInputRedirected) {
         $line = [Console]::In.ReadLine()
-        if ($null -eq $line) { return "" }
+        if ($null -eq $line) { return "0" }
         return $line
     }
     return (Read-Host $prompt)
@@ -146,13 +141,13 @@ function Write-SettingsJson($obj) {
 
 # ---------- API Key 存储与管理 ----------
 function Set-KeyStore($envName, $val) {
-    # 1. 写入用户环境变量（永久有效，所有新终端自动继承）
+    # 1. 写入用户环境变量（永久有效，所有新终端自动继承） 
     [Environment]::SetEnvironmentVariable($envName, $val, [System.EnvironmentVariableTarget]::User)
-    # 2. 写入当前进程环境变量（当前会话立即可用）
+    # 2. 写入当前进程环境变量（当前会话立即可用） 
     [Environment]::SetEnvironmentVariable($envName, $val, [System.EnvironmentVariableTarget]::Process)
     Set-Item -Path "env:$envName" -Value $val -Force
 
-    # 3. 写入 keys.ps1（PowerShell 脚本导入格式）
+    # 3. 写入 keys.ps1（PowerShell 脚本导入格式） 
     $existingPs1 = @()
     if (Test-Path $PI_KEYS_PS1) {
         $existingPs1 = Get-Content -Path $PI_KEYS_PS1 -Encoding UTF8 | Where-Object { $_ -notmatch "^\`$env:$envName\s*=" }
@@ -160,7 +155,7 @@ function Set-KeyStore($envName, $val) {
     $newPs1 = @($existingPs1) + @("`$env:$envName = `"$val`"")
     [System.IO.File]::WriteAllLines($PI_KEYS_PS1, $newPs1, $UTF8_NO_BOM)
 
-    # 4. 写入 keys.env（bash/cmd 导出格式）
+    # 4. 写入 keys.env（bash/cmd 导出格式） 
     $existingEnv = @()
     if (Test-Path $PI_KEYS_FILE) {
         $existingEnv = Get-Content -Path $PI_KEYS_FILE -Encoding UTF8 | Where-Object { $_ -notmatch "^export\s+$envName=" }
@@ -202,12 +197,12 @@ function Update-ProfileBlock {
             $mList = @($p.models)
             if ($mList.Count -gt 0) {
                 $firstModel = $mList[0].id
-                # PowerShell profile 函数
+                # PowerShell profile 函数 
                 $profileLines += "function global:pi-$pk { pi --provider $pk --model $firstModel @args }"
-                # 当前 PowerShell 会话立即可用
+                # 当前 PowerShell 会话立即可用 
                 Set-Item -Path "Function:global:pi-$pk" -Value ([ScriptBlock]::Create("pi --provider $pk --model $firstModel @args")) -Force
 
-                # CMD shim: pi-<pk>.cmd（供 cmd.exe、Git Bash 或 Win+R 直接运行）
+                # CMD shim: pi-<pk>.cmd（供 cmd.exe、Git Bash 或 Win+R 直接运行） 
                 $cmdFile = Join-Path $PI_BIN_DIR "pi-$pk.cmd"
                 $cmdContent = "@echo off`r`npi --provider $pk --model $firstModel %*`r`n"
                 [System.IO.File]::WriteAllText($cmdFile, $cmdContent, [System.Text.Encoding]::ASCII)
@@ -233,7 +228,7 @@ function Update-ProfileBlock {
         $finalProfile = @($existingProfile) + @($profileLines)
         [System.IO.File]::WriteAllLines($PROFILE_PATH, $finalProfile, $UTF8_NO_BOM)
     } catch {
-        # 若环境受组策略限制无法修改 Profile，不阻断运行
+        # 若环境受组策略限制无法修改 Profile，不阻断运行 
     }
 }
 
@@ -255,13 +250,14 @@ function Ensure-NodeInstalled {
         return $true
     }
 
-    Write-Warn "未检测到满足要求的 Node.js（当前: $(if ($cur -gt 0) { "v$cur" } else { "未安装" })，要求 >= v${NODE_MIN_MAJOR}.x）"
-    Write-Host "请选择 Node.js 获取方式："
-    Write-Host "  1) 自动下载配置便携版 Node.js LTS（推荐，免管理员权限，解压即用）"
+    $curDisp = if ($cur -gt 0) { "v$cur" } else { '未安装 ' }
+    Write-Warn "未检测到满足要求的 Node.js（当前: $curDisp，要求 >= v${NODE_MIN_MAJOR}.x） "
+    Write-Host "请选择 Node.js 获取方式： "
+    Write-Host "  1) 自动下载配置便携版 Node.js LTS（推荐，免管理员权限，解压即用） "
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Host "  2) 使用 winget 安装 Node.js LTS"
     }
-    Write-Host "  0) 稍后手动安装并退出"
+    Write-Host "  0) 稍后手动安装并退出 "
     
     $choice = Read-Input "选择 [1]"
     if ([string]::IsNullOrWhiteSpace($choice)) { $choice = "1" }
@@ -269,7 +265,7 @@ function Ensure-NodeInstalled {
     if ($choice -eq "2" -and (Get-Command winget -ErrorAction SilentlyContinue)) {
         Write-Info "正在通过 winget 安装 Node.js LTS..."
         & winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
-        # 刷新环境变量
+        # 刷新环境变量 
         $userPath = [Environment]::GetEnvironmentVariable("PATH", [System.EnvironmentVariableTarget]::User)
         $sysPath  = [Environment]::GetEnvironmentVariable("PATH", [System.EnvironmentVariableTarget]::Machine)
         $env:PATH = "$userPath;$sysPath"
@@ -298,7 +294,7 @@ function Ensure-NodeInstalled {
             Invoke-WebRequest -Uri $zipUrl -OutFile $tempZip -UseBasicParsing
         } catch {
             Write-Fail "下载 Node.js 失败: $($_.Exception.Message)"
-            Write-Host "建议手动前往 https://nodejs.org/ 下载安装包后重试。"
+            Write-Host "建议手动前往 https://nodejs.org/ 下载安装包后重试。 "
             return $false
         }
 
@@ -323,7 +319,7 @@ function Ensure-NodeInstalled {
         $env:PATH = "$destDir;$env:PATH"
         Write-Info "便携版 Node.js 已配置就绪：$destDir"
     } else {
-        Write-Warn "请先安装 Node.js >= 22 并配置 PATH，然后重跑本脚本。"
+        Write-Warn "请先安装 Node.js >= 22 并配置 PATH，然后重跑本脚本。 "
         return $false
     }
 
@@ -342,7 +338,7 @@ function Ensure-NodeInstalled {
 function Install-Pi {
     if (-not (Ensure-NodeInstalled)) { return }
 
-    # 检查当前 pi 版本
+    # 检查当前 pi 版本 
     $installedVer = ""
     try {
         $verOut = & pi --version 2>$null
@@ -351,7 +347,7 @@ function Install-Pi {
         }
     } catch {}
 
-    # 查询 npm 远端最新版本
+    # 查询 npm 远端最新版本 
     $targetVer = "latest"
     try {
         $viewOut = & npm view @earendil-works/pi-coding-agent version 2>$null
@@ -361,7 +357,7 @@ function Install-Pi {
     } catch {}
 
     if ($installedVer -ne "" -and $installedVer -eq $targetVer) {
-        Write-Info "pi 已是最新版本 v$installedVer，跳过安装"
+        Write-Info "pi 已是最新版本 v$installedVer，跳过安装。 "
     } else {
         if ($installedVer -ne "") {
             Write-Info "检测到旧版 pi v$installedVer，正在更新到 v$targetVer ..."
@@ -371,7 +367,7 @@ function Install-Pi {
         & npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$targetVer"
     }
 
-    # 检查并配置 npm 全局 bin 路径与 pi 快捷目录
+    # 检查并配置 npm 全局 bin 路径与 pi 快捷目录 
     try {
         $npmPrefix = (& npm prefix -g 2>$null).Trim()
         if ($npmPrefix -and (Test-Path $npmPrefix)) {
@@ -390,35 +386,35 @@ function Install-Pi {
     }
     $env:PATH = "$PI_BIN_DIR;$env:PATH"
 
-    # 执行策略优化（防止 Windows 阻拦执行 npm 生成的 .ps1 脚本）
+    # 执行策略优化（防止 Windows 阻拦执行 npm 生成的 .ps1 脚本） 
     try {
         $currPolicy = Get-ExecutionPolicy -Scope CurrentUser
         if ($currPolicy -eq "Restricted" -or $currPolicy -eq "Undefined") {
             $procPolicy = Get-ExecutionPolicy -Scope Process
             if ($procPolicy -ne "Bypass" -and $procPolicy -ne "Unrestricted") {
                 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction SilentlyContinue
-                Write-Info "已将当前用户 PowerShell 执行策略设为 RemoteSigned（允许执行本地安装脚本）"
+                Write-Info "已将当前用户 PowerShell 执行策略设为 RemoteSigned（允许执行本地安装脚本） "
             }
         }
     } catch {}
 
-    # 补写 settings（压制初次启动更新弹窗）
+    # 补写 settings（压制初次启动更新弹窗） 
     $settings = Read-SettingsJson
     $finalVer = if ($installedVer) { $installedVer } else { $targetVer }
     $settings | Add-Member -NotePropertyName "lastChangelogVersion" -NotePropertyValue $finalVer -Force
     Write-SettingsJson $settings
     Update-ProfileBlock
 
-    # 自检
+    # 自检 
     try {
         $check = & pi --version 2>$null
-        Write-Info "自检通过：pi 命令可用（v$check）"
+        Write-Info "自检通过：pi 命令可用（v$check） "
     } catch {
-        Write-Warn "当前窗口尚未刷新 PATH，若直接输入 pi 找不到，请新开一个 PowerShell 窗口。"
+        Write-Warn "当前窗口尚未刷新 PATH，若直接输入 pi 找不到，请新开一个 PowerShell 窗口。 "
     }
 
     Write-Host ""
-    Write-Info "完成！输入 pi 即可开用。"
+    Write-Info "完成！输入 pi 即可开用。 "
 
     $go = Read-Input "现在添加一个模型 provider（中转站）? [Y/n]"
     if ($go -notmatch '^[nN]') {
@@ -432,12 +428,12 @@ function Install-Pi {
 function Add-Provider {
     $models = Read-ModelsJson
 
-    # 1. provider 标识
+    # 1. provider 标识 
     $pk = ""
     while ($true) {
-        $pk = (Read-Input "provider 名（小写字母/数字/下划线，如 stepfun、myrelay）").Trim()
+        $pk = (Read-Input "provider 名（小写字母/数字/下划线，如 stepfun、myrelay） ").Trim()
         if ($pk -match '^[a-z][a-z0-9_]*$') { break }
-        Write-Warn "名字不合法，只能用小写字母/数字/下划线，且以字母开头"
+        Write-Warn "名字不合法，只能用小写字母/数字/下划线，且以字母开头 "
     }
 
     if ($models.providers.PSObject.Properties[$pk]) {
@@ -448,17 +444,17 @@ function Add-Provider {
     # 2. baseUrl
     $baseUrl = ""
     while ($true) {
-        $baseUrl = (Read-Input "baseUrl（如 https://api.stepfun.com/step_plan/v1）").Trim()
+        $baseUrl = (Read-Input "baseUrl（如 https://api.stepfun.com/step_plan/v1） ").Trim()
         if (-not [string]::IsNullOrEmpty($baseUrl)) { break }
-        Write-Warn "baseUrl 不能为空"
+        Write-Warn "baseUrl 不能为空 "
     }
 
-    # 3. API 类型
-    Write-Host "API 类型："
-    Write-Host "  1) openai-completions   （绝大多数中转站/OpenAI 兼容端点，默认）"
+    # 3. API 类型 
+    Write-Host "API 类型： "
+    Write-Host "  1) openai-completions   （绝大多数中转站/OpenAI 兼容端点，默认） "
     Write-Host "  2) openai-responses"
-    Write-Host "  3) anthropic-messages   （Claude 系中转）"
-    Write-Host "  4) google-generative-ai （Gemini 系中转）"
+    Write-Host "  3) anthropic-messages   （Claude 系中转） "
+    Write-Host "  4) google-generative-ai （Gemini 系中转） "
     $apiChoice = Read-Input "选择 [1]"
     $apiType = switch ($apiChoice.Trim()) {
         "2" { "openai-responses" }
@@ -467,9 +463,9 @@ function Add-Provider {
         default { "openai-completions" }
     }
 
-    # 4. 模型列表
-    Write-Info "输入模型 ID（发给 API 的名字，如 step-3.7-flash、gpt-4o），每行一个，直接回车结束"
-    Write-Info "每个模型可设置上下文窗口 / 最大输出 token，直接回车用默认（128000 / 16384）"
+    # 4. 模型列表 
+    Write-Info "输入模型 ID（发给 API 的名字，如 step-3.7-flash、gpt-4o），每行一个，直接回车结束 "
+    Write-Info "每个模型可设置上下文窗口 / 最大输出 token，直接回车用默认（128000 / 16384） "
     $modelsList = @()
     while ($true) {
         $mid = (Read-Input "模型ID").Trim()
@@ -489,14 +485,14 @@ function Add-Provider {
     }
 
     if ($modelsList.Count -eq 0) {
-        Write-Warn "至少要有一个模型，已取消添加"
+        Write-Warn "至少要有一个模型，已取消添加 "
         return
     }
 
-    # 5. API Key（密文输入）
+    # 5. API Key（密文输入） 
     $envName = "$($pk.ToUpper())_API_KEY"
     Write-Host ""
-    $keyVal = Read-SecretInput "API Key（存为用户环境变量，models.json 记 `$$envName 引用；无鉴权端点直接回车）"
+    $keyVal = Read-SecretInput "API Key（存为用户环境变量，models.json 记 `$$envName 引用；无鉴权端点直接回车） "
 
     $apiKeyArg = $null
     if (-not [string]::IsNullOrEmpty($keyVal)) {
@@ -517,7 +513,7 @@ function Add-Provider {
     $models.providers | Add-Member -NotePropertyName $pk -NotePropertyValue $entry -Force
     Write-ModelsJson $models
 
-    # 若尚未设置默认 provider，则自动设为默认
+    # 若尚未设置默认 provider，则自动设为默认 
     $settings = Read-SettingsJson
     if ([string]::IsNullOrEmpty($settings.defaultProvider)) {
         $settings | Add-Member -NotePropertyName "defaultProvider" -NotePropertyValue $pk -Force
@@ -531,7 +527,7 @@ function Add-Provider {
 }
 
 # ============================================================
-# 菜单 3：查看当前配置
+# 菜单 3：查看当前配置 
 # ============================================================
 function Show-Config {
     $models = Read-ModelsJson
@@ -539,12 +535,12 @@ function Show-Config {
 
     Write-Host ""
     Write-Host "================ pi 当前配置 ================" -ForegroundColor Cyan
-    $piVer = "未安装"
+    $piVer = '未安装 '
     try {
         $v = & pi --version 2>$null
         if ($v) { $piVer = $v }
     } catch {}
-    $nodeVer = "未安装"
+    $nodeVer = '未安装 '
     try {
         $nv = & node -v 2>$null
         if ($nv) { $nodeVer = $nv }
@@ -554,7 +550,7 @@ function Show-Config {
     $defP = if ($settings.defaultProvider) { $settings.defaultProvider } else { "-" }
     $defM = if ($settings.defaultModel) { $settings.defaultModel } else { "-" }
     if ($defP -eq "-") {
-        Write-Host " 默认模型 : （未设置，pi 启动时需手动 /model 选择）"
+        Write-Host " 默认模型 : （未设置，pi 启动时需手动 /model 选择） "
     } else {
         Write-Host " 默认模型 : $defP / $defM"
     }
@@ -567,7 +563,7 @@ function Show-Config {
     }
 
     if (-not $hasProviders) {
-        Write-Warn "还没有配置任何 provider，请使用菜单 2 添加"
+        Write-Warn "还没有配置任何 provider，请使用菜单 2 添加 "
         return
     }
 
@@ -577,9 +573,9 @@ function Show-Config {
     foreach ($prop in $models.providers.PSObject.Properties) {
         $pk = $prop.Name
         $p = $prop.Value
-        $keyDisp = "无"
+        $keyDisp = "无 "
         if ($p.apiKey) {
-            if ($p.apiKey -like "`$*") { $keyDisp = $p.apiKey } else { $keyDisp = "字面量" }
+            if ($p.apiKey -like "`$*") { $keyDisp = $p.apiKey } else { $keyDisp = "字面量 " }
         }
         $mDisps = @($p.models) | ForEach-Object {
             $m = $_
@@ -599,12 +595,12 @@ function Show-Config {
 }
 
 # ============================================================
-# 菜单 4：切换默认模型
+# 菜单 4：切换默认模型 
 # ============================================================
 function Choose-Default {
     $models = Read-ModelsJson
     if (-not $models.providers) {
-        Write-Warn "未配置任何 provider，请先使用菜单 2 添加"
+        Write-Warn "未配置任何 provider，请先使用菜单 2 添加 "
         return
     }
 
@@ -622,7 +618,7 @@ function Choose-Default {
     }
 
     Write-Host ""
-    Write-Info "选择默认模型："
+    Write-Info "选择默认模型： "
     for ($i = 0; $i -lt $allModels.Count; $i++) {
         Write-Host "  $($i + 1)) $($allModels[$i].Provider) / $($allModels[$i].Model)"
     }
@@ -649,13 +645,13 @@ function Choose-Default {
 function Reset-Key {
     $models = Read-ModelsJson
     if (-not $models.providers -or $models.providers.PSObject.Properties.Count -eq 0) {
-        Write-Warn "没有 provider，请先用菜单 2 添加"
+        Write-Warn "没有 provider，请先用菜单 2 添加 "
         return
     }
 
     $pks = @($models.providers.PSObject.Properties | ForEach-Object { $_.Name })
     Write-Host ""
-    Write-Info "给哪个 provider 重设 Key："
+    Write-Info "给哪个 provider 重设 Key： "
     for ($i = 0; $i -lt $pks.Count; $i++) {
         Write-Host "  $($i + 1)) $($pks[$i])"
     }
@@ -670,7 +666,7 @@ function Reset-Key {
     Write-Host ""
     $keyVal = Read-SecretInput "$pk 的新 API Key"
     if ([string]::IsNullOrEmpty($keyVal)) {
-        Write-Warn "输入为空，未做修改"
+        Write-Warn "输入为空，未做修改 "
         return
     }
 
@@ -686,13 +682,13 @@ function Reset-Key {
 function Delete-Provider {
     $models = Read-ModelsJson
     if (-not $models.providers -or $models.providers.PSObject.Properties.Count -eq 0) {
-        Write-Warn "没有 provider 可删"
+        Write-Warn "没有 provider 可删 "
         return
     }
 
     $pks = @($models.providers.PSObject.Properties | ForEach-Object { $_.Name })
     Write-Host ""
-    Write-Info "删除哪个 provider："
+    Write-Info "删除哪个 provider： "
     for ($i = 0; $i -lt $pks.Count; $i++) {
         Write-Host "  $($i + 1)) $($pks[$i])"
     }
@@ -714,7 +710,7 @@ function Delete-Provider {
         $settings.PSObject.Properties.Remove("defaultProvider")
         $settings.PSObject.Properties.Remove("defaultModel")
         Write-SettingsJson $settings
-        Write-Warn "该 provider 原为默认模型，默认设置已被清除"
+        Write-Warn "该 provider 原为默认模型，默认设置已被清除 "
     }
 
     Remove-KeyStore "$($pk.ToUpper())_API_KEY"
@@ -723,7 +719,7 @@ function Delete-Provider {
 }
 
 # ============================================================
-# 菜单 7：修改单个模型（参数 / 追加 / 删除）
+# 菜单 7：修改单个模型（参数 / 追加 / 删除） 
 # ============================================================
 function Edit-Model {
     $models = Read-ModelsJson
@@ -734,7 +730,7 @@ function Edit-Model {
 
     $pks = @($models.providers.PSObject.Properties | ForEach-Object { $_.Name })
     Write-Host ""
-    Write-Info "选择 provider："
+    Write-Info "选择 provider： "
     for ($i = 0; $i -lt $pks.Count; $i++) {
         Write-Host "  $($i + 1)) $($pks[$i])"
     }
@@ -747,25 +743,25 @@ function Edit-Model {
 
     $mList = [System.Collections.ArrayList]@(@($p.models))
     Write-Host ""
-    Write-Info "'$pk' 的模型列表："
+    Write-Info "'$pk' 的模型列表： "
     for ($i = 0; $i -lt $mList.Count; $i++) {
         $m = $mList[$i]
         $ctx = if ($m.contextWindow) { $m.contextWindow } else { "-" }
         $max = if ($m.maxTokens) { $m.maxTokens } else { "-" }
-        Write-Host "  $($i + 1)) $($m.id)    上下文=$ctx  最大输出=$max（- = pi 默认）"
+        Write-Host "  $($i + 1)) $($m.id)    上下文=$ctx  最大输出=$max（- = pi 默认） "
     }
-    Write-Host "  0) 追加一个新模型"
+    Write-Host "  0) 追加一个新模型 "
 
     $mSel = Read-Input "选择模型序号（0=追加新模型） [0]"
     if ([string]::IsNullOrWhiteSpace($mSel)) { $mSel = "0" }
 
-    # 分支：追加
+    # 分支：追加 
     if ($mSel -eq "0") {
         $mid = ""
         while ($true) {
             $mid = (Read-Input "新模型 ID").Trim()
             if (-not [string]::IsNullOrEmpty($mid)) { break }
-            Write-Warn "模型 ID 不能为空"
+            Write-Warn "模型 ID 不能为空 "
         }
         $mctx = (Read-Input "  上下文窗口 token [128000]").Trim()
         $mmax = (Read-Input "  最大输出 token [16384]").Trim()
@@ -788,14 +784,14 @@ function Edit-Model {
 
     $mIdx = [int]$mSel - 1
     if ($mIdx -lt 0 -or $mIdx -ge $mList.Count) {
-        Write-Warn "序号超出范围"
+        Write-Warn "序号超出范围 "
         return
     }
     $targetModel = $mList[$mIdx]
 
     Write-Host ""
-    Write-Host "  1) 修改参数（上下文 / 最大输出）"
-    Write-Host "  2) 删除该模型"
+    Write-Host "  1) 修改参数（上下文 / 最大输出） "
+    Write-Host "  2) 删除该模型 "
     $act = Read-Input "操作 [1]"
     if ([string]::IsNullOrWhiteSpace($act)) { $act = "1" }
 
@@ -812,12 +808,12 @@ function Edit-Model {
             $settings.PSObject.Properties.Remove("defaultProvider")
             $settings.PSObject.Properties.Remove("defaultModel")
             Write-SettingsJson $settings
-            Write-Warn "该模型原为默认模型，默认设置已被清除"
+            Write-Warn "该模型原为默认模型，默认设置已被清除 "
         }
         Update-ProfileBlock
         Write-Info "已删除模型 $pk / $($targetModel.id)"
     } else {
-        Write-Info "回车=不变，纯数字=修改，0=恢复 pi 默认值"
+        Write-Info "回车=不变，纯数字=修改，0=恢复 pi 默认值 "
         $newCtx = (Read-Input "上下文窗口 token").Trim()
         $newMax = (Read-Input "最大输出 token").Trim()
 
@@ -841,14 +837,14 @@ function Edit-Model {
 }
 
 # ============================================================
-# 菜单 8：卸载
+# 菜单 8：卸载 
 # ============================================================
 function Uninstall-PiPkg {
     try {
         if (Get-Command npm -ErrorAction SilentlyContinue) {
             Write-Info "正在卸载 pi 全局 npm 包..."
             & npm uninstall -g @earendil-works/pi-coding-agent
-            Write-Info "pi 已卸载"
+            Write-Info "pi 已卸载 "
         }
     } catch {
         Write-Warn "卸载 pi 遇到错误: $($_.Exception.Message)"
@@ -856,7 +852,7 @@ function Uninstall-PiPkg {
 }
 
 function Clean-ProfileAndShims {
-    # 1. 清理 Profile 托管块
+    # 1. 清理 Profile 托管块 
     if (Test-Path $PROFILE_PATH) {
         $rawProfile = Get-Content -Path $PROFILE_PATH -Encoding UTF8
         $newProfile = @()
@@ -867,7 +863,7 @@ function Clean-ProfileAndShims {
             if (-not $inBlock) { $newProfile += $line }
         }
         [System.IO.File]::WriteAllLines($PROFILE_PATH, $newProfile, $UTF8_NO_BOM)
-        Write-Info "已清理 PowerShell Profile 托管块"
+        Write-Info "已清理 PowerShell Profile 托管块 "
     }
 
     # 2. 清理 pi-*.cmd
@@ -879,19 +875,19 @@ function Clean-ProfileAndShims {
 
 function Remove-PiData {
     if (-not (Test-Path $PI_DIR)) {
-        Write-Info "~/.pi/agent 不存在，跳过"
+        Write-Info "~/.pi/agent 不存在，跳过 "
         return
     }
-    Write-Host "  1) 全部删除 ~/.pi（配置 + Key + 登录状态 + 会话历史）"
-    Write-Host "  2) 只删本工具写的配置（models/settings/keys），保留会话历史"
+    Write-Host "  1) 全部删除 ~/.pi（配置 + Key + 登录状态 + 会话历史） "
+    Write-Host "  2) 只删本工具写的配置（models/settings/keys），保留会话历史 "
     $c = Read-Input "选择 [2]"
     if ($c -eq "1") {
         $piRoot = Join-Path $env:USERPROFILE ".pi"
         Remove-Item -Path $piRoot -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Info "$piRoot 已完全删除"
+        Write-Info "$piRoot 已完全删除 "
     } else {
         Remove-Item -Path $PI_MODELS_FILE, $PI_SETTINGS_FILE, $PI_KEYS_FILE, $PI_KEYS_PS1 -Force -ErrorAction SilentlyContinue
-        Write-Info "配置文件已删除（历史会话保留在 ~/.pi）"
+        Write-Info "配置文件已删除（历史会话保留在 ~/.pi） "
     }
 }
 
@@ -908,15 +904,15 @@ function Uninstall-PortableNode {
             Write-Info "便携版 Node.js 已卸载，并已移出用户 PATH"
         }
     } else {
-        Write-Info "未发现便携版 Node.js（系统原有 Node.js 不受影响）"
+        Write-Info "未发现便携版 Node.js（系统原有 Node.js 不受影响） "
     }
 }
 
 function Uninstall-All {
-    Write-Host "将依次执行："
-    Write-Host "  1) 卸载 pi 全局 npm 包"
-    Write-Host "  2) 清理 Profile 别名与快捷命令"
-    Write-Host "  3) 删除 pi 配置数据"
+    Write-Host "将依次执行： "
+    Write-Host "  1) 卸载 pi 全局 npm 包 "
+    Write-Host "  2) 清理 Profile 别名与快捷命令 "
+    Write-Host "  3) 删除 pi 配置数据 "
     Write-Host "  4) 卸载便携版 Node.js"
     $ok = Read-Input "确认全部卸载? [y/N]"
     if ($ok -notmatch '^[yY]') { return }
@@ -925,18 +921,18 @@ function Uninstall-All {
     Clean-ProfileAndShims
     Remove-PiData
     Uninstall-PortableNode
-    Write-Info "卸载完成！"
+    Write-Info "卸载完成！ "
 }
 
 function Uninstall-Menu {
     Write-Host ""
-    Write-Info "卸载向导（分块清理，系统原有软件不受影响）"
-    Write-Host "  a) 全部卸载（pi + 别名/Shim + 配置数据 + 便携版 Node）"
-    Write-Host "  1) 只卸载 pi 本体（npm 包）"
-    Write-Host "  2) 只清理别名与快捷命令（Profile / shims）"
-    Write-Host "  3) 只删 pi 配置与数据"
+    Write-Info "卸载向导（分块清理，系统原有软件不受影响） "
+    Write-Host "  a) 全部卸载（pi + 别名/Shim + 配置数据 + 便携版 Node） "
+    Write-Host "  1) 只卸载 pi 本体（npm 包） "
+    Write-Host "  2) 只清理别名与快捷命令（Profile / shims） "
+    Write-Host "  3) 只删 pi 配置与数据 "
     Write-Host "  4) 只卸载便携版 Node.js"
-    Write-Host "  0) 取消"
+    Write-Host "  0) 取消 "
     $c = Read-Input "选择 [0]"
     switch ($c.Trim()) {
         "a" { Uninstall-All }
@@ -950,7 +946,7 @@ function Uninstall-Menu {
 }
 
 # ============================================================
-# 主菜单
+# 主菜单 
 # ============================================================
 function Show-MainMenu {
     while ($true) {
@@ -959,16 +955,16 @@ function Show-MainMenu {
         Write-Host "  pi 管理器（安装 · 中转站 · 模型切换）[Win]" -ForegroundColor Cyan
         Write-Host "=============================================" -ForegroundColor Cyan
         Write-Host "  1) 安装 / 更新 pi"
-        Write-Host "  2) 添加 / 修改 provider（baseUrl、模型、API Key）"
-        Write-Host "  3) 查看当前配置和默认模型"
-        Write-Host "  4) 切换默认模型"
+        Write-Host "  2) 添加 / 修改 provider（baseUrl、模型、API Key） "
+        Write-Host "  3) 查看当前配置和默认模型 "
+        Write-Host "  4) 切换默认模型 "
         Write-Host "  5) 重设 API Key"
         Write-Host "  6) 删除 provider"
-        Write-Host "  7) 修改单个模型（参数 / 追加 / 删除）"
-        Write-Host "  8) 卸载（pi / Node / 别名 / 配置）"
-        Write-Host "  0) 退出"
+        Write-Host "  7) 修改单个模型（参数 / 追加 / 删除） "
+        Write-Host "  8) 卸载（pi / Node / 别名 / 配置） "
+        Write-Host "  0) 退出 "
 
-        $status = "pi 未安装"
+        $status = 'pi 未安装 '
         try {
             $piVer = & pi --version 2>$null
             if ($piVer) { $status = "pi $piVer" }
@@ -994,6 +990,4 @@ function Show-MainMenu {
     }
 }
 
-if (-not $NoMenu) {
-    Show-MainMenu
-}
+Show-MainMenu
